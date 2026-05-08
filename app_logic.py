@@ -13,12 +13,12 @@ load_dotenv()
 GOOGLE_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
 
 if not GOOGLE_API_KEY:
-    st.error("❌ Google API Key is missing! Please add it to your .env file.")
+    st.error("❌ Google API Key is missing! Add GEMINI_API_KEY to your .env file.")
     st.stop()
 
-# ====================== LLM (Fixed Model Name) ======================
+# ====================== LLM ======================
 llm = ChatGoogleGenerativeAI(
-    model="gemini-1.5-flash-latest",   # ← Changed to this
+    model="gemini-flash-latest",      # Best working alias right now
     temperature=0.1,
     google_api_key=GOOGLE_API_KEY,
 )
@@ -27,9 +27,9 @@ def create_rag_chain():
     vector_store = get_vector_store()
     retriever = vector_store.as_retriever(search_kwargs={"k": 5})
    
-    template = """You are a professional HR assistant for Elements HR Services.
-Answer the question using only the provided context.
-If the answer is not in the context, say: "I don't know based on the provided policies."
+    template = """You are a professional HR assistant.
+Use only the following context to answer the question.
+If you cannot find the answer, say: "I don't know based on the provided policies."
 
 Context:
 {context}
