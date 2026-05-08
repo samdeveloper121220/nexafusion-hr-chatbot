@@ -1,7 +1,7 @@
 streamlit
-langchain
-langchain-community
-langchain-google-genai
+langchain==0.3.7
+langchain-community==0.3.7
+langchain-google-genai==2.0.4
 pypdf
 faiss-cpu
 huggingface-hub
@@ -9,5 +9,5 @@ sentence-transformers
 python-dotenv
 pandas
 plotly
-streamlit-option-menu
 altair
+streamlit-option-menu
