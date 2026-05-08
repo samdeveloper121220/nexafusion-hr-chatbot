@@ -9,32 +9,26 @@ from langchain_core.output_parsers import StrOutputParser
 from vector_store import get_vector_store
 
 # ====================== API KEY HANDLING ======================
-# This works both locally (.env) and on Streamlit Cloud (secrets.toml)
-
 if os.path.exists(".env"):
     load_dotenv()
-    GEMINI_API_KEY = os.getenv("GOOGLE_API_KEY")
+    GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 else:
-    # For Streamlit Cloud
-    GEMINI_API_KEY = st.secrets["GOOGLE_API_KEY"]
+    GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
 
-# ====================== LLM CONFIG ======================
+# ====================== LLM ======================
 llm = ChatGoogleGenerativeAI(
-    model="gemini-1.5-flash",          # Better & more stable model
+    model="gemini-1.5-flash",
     temperature=0.1,
-    google_api_key=GEMINI_API_KEY,
-    convert_system_message_to_human=True
+    google_api_key=GOOGLE_API_KEY,
 )
 
 def create_rag_chain():
     vector_store = get_vector_store()
-    retriever = vector_store.as_retriever(
-        search_kwargs={"k": 6}   # Increased for better context
-    )
+    retriever = vector_store.as_retriever(search_kwargs={"k": 6})
    
-    template = """You are a professional and helpful HR assistant for Elements HR Services.
-Answer the question based **only** on the following context from company policies.
-If the answer cannot be found in the context, politely say you don't know.
+    template = """You are a professional HR assistant for Elements HR Services.
+Answer the question based **only** on the provided context from company policies.
+If the answer is not in the context, say "I don't know based on the provided policies."
 Do not make up any information.
 
 Context:
@@ -42,13 +36,15 @@ Context:
 
 Question: {question}
 
-Answer in a clear, professional, and concise manner:"""
+Answer professionally and clearly."""
 
     prompt = ChatPromptTemplate.from_template(template)
    
     def format_docs(docs):
         return "\n\n".join(
-            f"Source: {doc.metadata.get('source', 'Unknown')} (Page {doc.metadata.get('page', '?')})\n{doc.page_content}"
+            f"Source: {doc.metadata.get('source', 'Unknown')} "
+            f"(Page {doc.metadata.get('page', '?')})\n"
+            f"{doc.page_content}"
             for doc in docs
         )
    
