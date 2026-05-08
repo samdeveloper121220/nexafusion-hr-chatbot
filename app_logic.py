@@ -11,32 +11,35 @@ from vector_store import get_vector_store
 # ====================== API KEY ======================
 if os.path.exists(".env"):
     load_dotenv()
-    GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+    GOOGLE_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
 else:
-    GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
+    GOOGLE_API_KEY = st.secrets.get("GOOGLE_API_KEY")
 
-# ====================== LLM (Fixed Version) ======================
+if not GOOGLE_API_KEY:
+    st.error("⚠️ Google API Key is missing. Please add it in .streamlit/secrets.toml")
+    st.stop()
+
+# ====================== LLM ======================
 llm = ChatGoogleGenerativeAI(
     model="gemini-1.5-flash",
     temperature=0.1,
     google_api_key=GOOGLE_API_KEY,
-    # Removed problematic parameters
 )
 
 def create_rag_chain():
     vector_store = get_vector_store()
-    retriever = vector_store.as_retriever(search_kwargs={"k": 5})
+    retriever = vector_store.as_retriever(search_kwargs={"k": 6})
    
-    template = """You are a professional HR assistant.
-Use only the following context to answer the question.
-If you cannot find the answer in the context, say: "I don't know based on the provided policies."
+    template = """You are a professional HR assistant for Elements HR Services.
+Answer the question using only the provided context from company policies.
+If the answer is not in the context, clearly say: "I don't know based on the provided policies."
 
 Context:
 {context}
 
 Question: {question}
 
-Answer professionally and clearly:"""
+Answer in a clear, professional, and helpful manner:"""
 
     prompt = ChatPromptTemplate.from_template(template)
    

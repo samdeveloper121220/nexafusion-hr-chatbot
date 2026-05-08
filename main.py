@@ -1,27 +1,19 @@
 import streamlit as st
 import sqlite3
-import os
 from app_logic import create_rag_chain
-from vector_store import get_vector_store
-from utils.escalation import should_escalate_to_human
+from vector_store import get_vector_store, save_vector_store
 from ingest import ingest_documents
 from analytics.dashboard import log_conversation
+from utils.escalation import should_escalate_to_human
 
-# ==========================================
-# DATABASE INITIALIZATION
-# ==========================================
+# ====================== DATABASE INIT ======================
 def init_db():
-    db_path = 'chat_history.db'
-    
-    # Connect to the DB (this creates it if it doesn't exist)
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect('chat_history.db')
     c = conn.cursor()
-    
-    # Create the table exactly as log_conversation expects it
     c.execute('''
         CREATE TABLE IF NOT EXISTS conversations (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT,
+            timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
             user_query TEXT,
             bot_response TEXT,
             escalated BOOLEAN,
@@ -31,69 +23,51 @@ def init_db():
     conn.commit()
     conn.close()
 
-# Run this the moment the app boots up
 init_db()
-# ==========================================
 
-# Simplified Memory
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
+# ====================== SESSION STATE ======================
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
 st.set_page_config(page_title="Nexafusion HR Assistant", layout="wide")
 st.title("🤖 Nexafusion HR Support")
 st.caption("Elements HR Services - Ask anything about policies")
 
-# ==========================================
-# SIDEBAR (Now includes History!)
-# ==========================================
+# ====================== SIDEBAR ======================
 with st.sidebar:
     st.header("Admin Controls")
     if st.button("🔄 Re-ingest All Policies"):
         with st.spinner("Updating knowledge base..."):
             ingest_documents()
-        st.success("✅ Knowledge base updated!")
-        
+        st.success("✅ Knowledge base updated successfully!")
+
     if st.button("🗑️ Clear Chat"):
         st.session_state.messages = []
         st.rerun()
 
     st.divider()
-
-    # Fetch and Display Chat History
     st.header("Recent History")
     try:
         conn = sqlite3.connect('chat_history.db')
         c = conn.cursor()
-        c.execute('''
-            SELECT user_query 
-            FROM conversations 
-            ORDER BY id DESC 
-            LIMIT 10
-        ''')
+        c.execute("SELECT user_query FROM conversations ORDER BY id DESC LIMIT 8")
         history = c.fetchall()
         conn.close()
-
         if history:
-            for record in history:
-                query = record[0]
-                display_text = query if len(query) < 30 else query[:27] + "..."
-                st.caption(f"🕒 {display_text}")
+            for q in history:
+                text = q[0][:35] + "..." if len(q[0]) > 35 else q[0]
+                st.caption(f"• {text}")
         else:
-            st.info("No history yet. Start chatting!")
-            
-    except Exception as e:
-        st.caption("History currently unavailable.")
-# ==========================================
+            st.info("No conversations yet.")
+    except:
+        st.caption("History unavailable.")
 
-# Display active chat messages
-for msg in st.session_state.messages if "messages" in st.session_state else []:
+# ====================== CHAT INTERFACE ======================
+for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-if prompt := st.chat_input("Ask about leave policy, code of conduct..."):
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-    
+if prompt := st.chat_input("Ask about leave policy, code of conduct, etc..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -103,8 +77,9 @@ if prompt := st.chat_input("Ask about leave policy, code of conduct..."):
             try:
                 rag_chain, retriever = create_rag_chain()
                 
+                # Get documents with similarity scores
                 vector_store = get_vector_store()
-                docs_with_score = vector_store.similarity_search_with_score(prompt, k=3)
+                docs_with_score = vector_store.similarity_search_with_score(prompt, k=5)
                 
                 docs = [doc for doc, score in docs_with_score]
                 scores = [score for doc, score in docs_with_score]
@@ -120,21 +95,18 @@ if prompt := st.chat_input("Ask about leave policy, code of conduct..."):
                         f"(Page {doc.metadata.get('page', '?')})" 
                         for doc in docs
                     ])
-                    full_response = f"{response}\n\n**Sources:**\n{sources}"
-                    response = full_response
+                    response = f"{response}\n\n**Sources:**\n{sources}"
 
                 st.markdown(response)
                 st.session_state.messages.append({"role": "assistant", "content": response})
 
+                # Log to analytics
                 log_conversation(
                     user_query=prompt,
                     bot_response=response[:500],
                     escalated=should_escalate_to_human(avg_score, prompt),
                     confidence=avg_score
                 )
-
-                # Force the sidebar to update immediately after logging
-                st.rerun()
 
             except Exception as e:
                 error_msg = f"❌ Error processing your request: {str(e)}"
