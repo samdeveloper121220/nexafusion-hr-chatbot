@@ -8,38 +8,35 @@ from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 from vector_store import get_vector_store
 
-# ====================== API KEY ======================
-if os.path.exists(".env"):
-    load_dotenv()
-    GOOGLE_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-else:
-    GOOGLE_API_KEY = st.secrets.get("GOOGLE_API_KEY")
+# ====================== LOAD API KEY ======================
+load_dotenv()
+GOOGLE_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
 
 if not GOOGLE_API_KEY:
-    st.error("⚠️ Google API Key is missing. Please add it in .streamlit/secrets.toml")
+    st.error("❌ Google API Key is missing! Please add it to your .env file.")
     st.stop()
 
-# ====================== LLM ======================
+# ====================== LLM (Fixed Model Name) ======================
 llm = ChatGoogleGenerativeAI(
-    model="gemini-1.5-flash",
+    model="gemini-1.5-flash-latest",   # ← Changed to this
     temperature=0.1,
     google_api_key=GOOGLE_API_KEY,
 )
 
 def create_rag_chain():
     vector_store = get_vector_store()
-    retriever = vector_store.as_retriever(search_kwargs={"k": 6})
+    retriever = vector_store.as_retriever(search_kwargs={"k": 5})
    
     template = """You are a professional HR assistant for Elements HR Services.
-Answer the question using only the provided context from company policies.
-If the answer is not in the context, clearly say: "I don't know based on the provided policies."
+Answer the question using only the provided context.
+If the answer is not in the context, say: "I don't know based on the provided policies."
 
 Context:
 {context}
 
 Question: {question}
 
-Answer in a clear, professional, and helpful manner:"""
+Answer professionally and clearly:"""
 
     prompt = ChatPromptTemplate.from_template(template)
    
